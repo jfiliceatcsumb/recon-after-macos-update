@@ -12,6 +12,6 @@ This is a relatively simple Jamf Pro script that performs the following when tri
 4. If the recon is successful, it will update the tracking plist so that the process can repeat itself after any other macOS upgrades
 
 Notes:
- - By default logs are stored in `/var/log/post-macos-upgrade-recon.jss.log`
- - By default the macOS version tracking plist is `/Library/Preferences/edu.csumb.it.configuration.plist`
+ - By default logs are stored in `/var/log/jamf.log`
+ - By default the macOS version tracking plist is `/Library/Preferences/edu.csumb.it.custom.plist`
 
