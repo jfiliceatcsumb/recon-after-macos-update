@@ -73,10 +73,20 @@ lastRecordedOSBuild=$(/usr/bin/defaults read "${PlistPath}" OS_Build 2> /dev/nul
 currentOSVersion=$(/usr/bin/sw_vers -productVersion)
 currentOSBuild=$(/usr/bin/sw_vers --buildVersion)
 
+if [ -z "${PlistPath}" ]; then
+	echo "Error: Missing parameter value for PlistPath"
+	exit 1
+fi
+if [ -z "${checkJSSConnection_retry}" ]; then
+	echo "Error: Missing parameter value for checkJSSConnection_retry"
+	exit 1
+fi
+
 echo "Running jamf checkJSSConnection to make sure we can access the Jamf Pro server..."
 /usr/local/bin/jamf checkJSSConnection -retry ${checkJSSConnection_retry} -randomDelaySeconds 5
 
 # If we have recorded the OS version before, check to see if our recorded value matches the current version
+
 if [[ -n "$lastRecordedOSBuild" ]]; then
     if [[ ! "$currentOSBuild" == "$lastRecordedOSBuild" ]]; then
         echo "This Mac has been updated from $lastRecordedOSVersion ($lastRecordedOSBuild) to $currentOSVersion ($currentOSBuild); running jamf recon..."
@@ -90,10 +100,11 @@ if [[ -n "$lastRecordedOSBuild" ]]; then
         echo "No change in macOS version detected."
     fi
 else
-    echo "This appears to be the first run; initializing plist."
+    echo "This appears to be the first run; initializing plist and running jamf recon..."
     # Record the current OS version to use as comparison upon next run
     /usr/bin/defaults write "${PlistPath}" OS_Version -string "$currentOSVersion"
     /usr/bin/defaults write "${PlistPath}" OS_Build -string "$currentOSBuild"
+    /usr/local/bin/jamf recon -randomDelaySeconds 10 
 fi
 
 echo "Reading ${PlistPath}..."
