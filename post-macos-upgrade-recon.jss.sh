@@ -6,11 +6,18 @@
 # California State University, Monterey Bay
 # https://csumb.edu/it
 
-
-# This script requires Jamf Pro binary to be installed.
-# Run it with no arguments. 
-# 
 # Use as script in Jamf JSS.
+
+# This script requires Jamf Pro management framework to be installed.
+# Run it with the following optional positional parameters. 
+# If these parameters are not passed to the script, then they must be hardcoded in the VARIABLES below.
+# 
+# 	[PlistPath]
+# 		Full path to .plist file used to record the OS version/build values.
+# 
+# 	[checkJSSConnection_retry]
+# 		The number of times the Jamf Pro server connection should be tested; while waiting 5 seconds between tries.
+# 
 
 # https://github.com/jfiliceatcsumb/recon-after-macos-update
 
@@ -40,82 +47,44 @@ echo "mountPoint=$mountPoint"
 echo "computerName=$computerName"
 echo "userName=$userName"
 
+
+set -x
+
 # ##########################################
 # VARIABLES - edit to suite your organization and preferred locations
 # ##########################################
 # 
+# Full path to .plist file used to record the OS version/build values
+PlistPath="/Library/Preferences/edu.csumb.custom.plist"
 
-
-set -x
-
-currentOSVersion=$(/usr/bin/sw_vers -productVersion)
-currentOSBuild=$(/usr/bin/sw_vers --buildVersion)
-lastRecordedOSVersion=$(/usr/bin/defaults read /Library/Preferences/edu.csumb.custom.plist OS_Version 2> /dev/null)
-lastRecordedOSBuild=$(/usr/bin/defaults read /Library/Preferences/edu.csumb.custom.plist OS_Build 2> /dev/null)
+# The number of times the Jamf Pro server connection should be tested; while waiting 5 seconds between tries.
+checkJSSConnection_retry=720
 # ##########################################
 
+# Read parameters passed from JSS
+PlistPath_Param=${1}
+checkJSSConnection_retry_Param=${2}
 
-function initial_network_test () {
-    # Include rc.common for the CheckForNetwork function
-    . /etc/rc.common
+# Assign argument parameters from JSS, or if not assigned, use hardcoded values.
+PlistPath=${PlistPath_Param:-$PlistPath}
+checkJSSConnection_retry=${checkJSSConnection_retry_Param:-$checkJSSConnection_retry}
+lastRecordedOSVersion=$(/usr/bin/defaults read "${PlistPath}" OS_Version 2> /dev/null)
+lastRecordedOSBuild=$(/usr/bin/defaults read "${PlistPath}" OS_Build 2> /dev/null)
+currentOSVersion=$(/usr/bin/sw_vers -productVersion)
+currentOSBuild=$(/usr/bin/sw_vers --buildVersion)
 
-    local counter=1
-
-    echo "Waiting up to 240 minutes for an active network connection..."
-    CheckForNetwork
-    while [[ "${NETWORKUP}" != "-YES-" ]] && [[ $counter -ne 2880 ]]; do
-        /bin/sleep 5
-        NETWORKUP=
-        CheckForNetwork
-        ((counter++))
-    done
-
-    if [[ "${NETWORKUP}" == "-YES-" ]]; then
-        echo "Network connection appears to be active; continuing."
-    else
-        echo "Network connection appears to be offline; exiting."
-        exit 1
-    fi
-}
-
-function external_dns_lookup_test () {
-    local jamfPlist domainToLookup externalDNSServerIP dnsLookupResult timer
-
-    jamfPlist="/Library/Preferences/com.jamfsoftware.jamf.plist"
-    domainToLookup=$(/usr/bin/defaults read "$jamfPlist" jss_url | /usr/bin/sed s'/.$//' | /usr/bin/awk -F '/' '{print $NF}' | /usr/bin/cut -f1 -d":")
-    externalDNSServerIP="8.8.8.8"
-    dnsLookupResult=$(/usr/bin/dig @"$externalDNSServerIP" "$domainToLookup" 2> /dev/null | /usr/bin/grep -A1 'ANSWER SECTION' | /usr/bin/grep "$domainToLookup")
-    timer="120"
-
-    # Do an external DNS lookup on the Jamf Pro URL that this Mac reports to, if we get an answer from the external DNS server we have network
-    echo "Performing external DNS lookup on $domainToLookup..."
-    while [[ -z "$dnsLookupResult" ]] && [[ "$timer" -gt "0" ]]; do
-        dnsLookupResult=$(dig @"$externalDNSServerIP" "$domainToLookup" 2> /dev/null | /usr/bin/grep -A1 'ANSWER SECTION' | /usr/bin/grep "$domainToLookup")
-        sleep 1
-        ((timer--))
-    done
-
-    if [[ -n "$dnsLookupResult" ]]; then
-        echo "DNS lookup succeeded; continuing."
-    else
-        echo "DNS lookup failed; exiting."
-        exit 1
-    fi
-}
-
-# Run our functions to make sure we can access the Jamf Pro server
-initial_network_test
-external_dns_lookup_test
+echo "Running jamf checkJSSConnection to make sure we can access the Jamf Pro server..."
+/usr/local/bin/jamf checkJSSConnection -retry ${checkJSSConnection_retry} -randomDelaySeconds 5
 
 # If we have recorded the OS version before, check to see if our recorded value matches the current version
 if [[ -n "$lastRecordedOSBuild" ]]; then
     if [[ ! "$currentOSBuild" == "$lastRecordedOSBuild" ]]; then
         echo "This Mac has been updated from $lastRecordedOSVersion ($lastRecordedOSBuild) to $currentOSVersion ($currentOSBuild); running jamf recon..."
-        if /usr/local/bin/jamf recon # jamf recon successful
+        if /usr/local/bin/jamf recon -randomDelaySeconds 10 # jamf recon successful
         then
             # Record the current OS version to use as comparison upon next run
-            /usr/bin/defaults write /Library/Preferences/edu.csumb.custom.plist OS_Version "$currentOSVersion"
-            /usr/bin/defaults write /Library/Preferences/edu.csumb.custom.plist OS_Build "$currentOSBuild"
+            /usr/bin/defaults write "${PlistPath}" OS_Version -string "$currentOSVersion"
+            /usr/bin/defaults write "${PlistPath}" OS_Build -string "$currentOSBuild"
         fi
     else
         echo "No change in macOS version detected."
@@ -123,8 +92,10 @@ if [[ -n "$lastRecordedOSBuild" ]]; then
 else
     echo "This appears to be the first run; initializing plist."
     # Record the current OS version to use as comparison upon next run
-    /usr/bin/defaults write /Library/Preferences/edu.csumb.custom.plist OS_Version "$currentOSVersion"
-    /usr/bin/defaults write /Library/Preferences/edu.csumb.custom.plist OS_Build "$currentOSBuild"
+    /usr/bin/defaults write "${PlistPath}" OS_Version -string "$currentOSVersion"
+    /usr/bin/defaults write "${PlistPath}" OS_Build -string "$currentOSBuild"
 fi
 
+echo "Reading ${PlistPath}..."
+/usr/bin/defaults read "${PlistPath}"
 exit
