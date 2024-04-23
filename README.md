@@ -1,4 +1,4 @@
-# post-macos-upgrade-recon.jss
+# post-macos-upgrade-recon.jss.sh
 
 Jamf Pro script that performs a Jamf Pro inventory update when a change in macOS version is detected. This script should be run by a Jamf Pro policy that is configured with the following triggers:
 - Startup
@@ -12,6 +12,15 @@ This is a relatively simple Jamf Pro script that performs the following when tri
 4. If the recon is successful, it will update the tracking plist so that the process can repeat itself after any other macOS upgrades
 
 Notes:
+ - This script requires Jamf Pro management framework to be installed.
+ - Run it with the following optional positional parameters. 
+ - If these parameters are not passed to the script, then they must be hardcoded in the VARIABLES in the script.
+	PlistPath
+		Full path to .plist file used to record the OS version/build values.
+
+	checkJSSConnection_retry
+		The number of times the Jamf Pro server connection should be tested; while waiting 5 seconds between tries.
+
  - By default logs are stored in `/var/log/jamf.log`
- - By default the macOS version tracking plist is `/Library/Preferences/edu.csumb.it.custom.plist`
+ - By default the macOS version tracking plist is `/Library/Preferences/edu.csumb.custom.plist`
 
