@@ -15,10 +15,10 @@ Notes:
  - This script requires Jamf Pro management framework to be installed.
  - Run it with the following optional positional parameters. 
  - If these parameters are not passed to the script, then they must be hardcoded in the VARIABLES in the script.
-	PlistPath
+	- 	PlistPath
 		Full path to .plist file used to record the OS version/build values.
 
-	checkJSSConnection_retry
+	- 	checkJSSConnection_retry
 		The number of times the Jamf Pro server connection should be tested; while waiting 5 seconds between tries.
 
  - By default logs are stored in `/var/log/jamf.log`
